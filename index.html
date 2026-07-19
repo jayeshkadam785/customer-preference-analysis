@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Customer Preference Analysis | Cuisine vs Rating</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#0d1117; --card:#161b22; --border:#262c36;
+    --text:#e6edf3; --muted:#8b949e; --accent:#58a6ff; --good:#3fb950; --bad:#f85149;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; font-family:'Segoe UI',system-ui,sans-serif;
+    background:var(--bg); color:var(--text); padding:20px;
+  }
+  header{text-align:center; margin-bottom:28px;}
+  header h1{font-size:1.5rem; margin-bottom:6px; letter-spacing:.3px;}
+  header p{color:var(--muted); font-size:.9rem; margin:0;}
+  .badge{
+    display:inline-block; background:#1f2937; color:var(--accent);
+    padding:3px 10px; border-radius:12px; font-size:.72rem; margin-top:8px;
+  }
+  .stats{
+    display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr));
+    gap:12px; max-width:900px; margin:0 auto 30px auto;
+  }
+  .stat-card{
+    background:var(--card); border:1px solid var(--border); border-radius:10px;
+    padding:14px; text-align:center;
+  }
+  .stat-card .val{font-size:1.5rem; font-weight:700; color:var(--accent);}
+  .stat-card .lbl{font-size:.75rem; color:var(--muted); margin-top:4px;}
+  .grid{
+    display:grid; grid-template-columns:1fr; gap:20px; max-width:900px; margin:0 auto;
+  }
+  @media(min-width:760px){ .grid{grid-template-columns:1fr 1fr;} .full{grid-column:1/-1;} }
+  .card{
+    background:var(--card); border:1px solid var(--border); border-radius:12px; padding:16px;
+  }
+  .card h2{font-size:1rem; margin:0 0 4px 0;}
+  .card .sub{font-size:.78rem; color:var(--muted); margin-bottom:12px;}
+  canvas{max-height:320px;}
+  .insight{
+    background:var(--card); border:1px solid var(--border); border-radius:12px;
+    padding:16px; max-width:900px; margin:20px auto 0 auto; font-size:.88rem; line-height:1.6;
+  }
+  .insight h2{margin-top:0; font-size:1rem;}
+  .insight ul{margin:8px 0 0 0; padding-left:20px; color:var(--muted);}
+  .insight li{margin-bottom:6px;}
+  .insight b{color:var(--text);}
+  footer{text-align:center; color:var(--muted); font-size:.75rem; margin-top:30px;}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🍽️ Customer Preference Analysis</h1>
+  <p>Cuisine type vs. restaurant rating &middot; Zomato dataset</p>
+  <span class="badge">Cognifyz Data Science Internship &mdash; Level 3, Task 2</span>
+</header>
+
+<div class="stats">
+  <div class="stat-card"><div class="val" id="statRestaurants">-</div><div class="lbl">Rated Restaurants</div></div>
+  <div class="stat-card"><div class="val" id="statCuisines">-</div><div class="lbl">Unique Cuisines</div></div>
+  <div class="stat-card"><div class="val" id="statAvg">-</div><div class="lbl">Overall Avg Rating</div></div>
+</div>
+
+<div class="grid">
+  <div class="card">
+    <h2>Top Rated Cuisines</h2>
+    <div class="sub">Highest average rating (min. 30 restaurants)</div>
+    <canvas id="topRatedChart"></canvas>
+  </div>
+
+  <div class="card">
+    <h2>Lowest Rated Cuisines</h2>
+    <div class="sub">Lowest average rating (min. 30 restaurants)</div>
+    <canvas id="bottomRatedChart"></canvas>
+  </div>
+
+  <div class="card">
+    <h2>Most Popular by Votes</h2>
+    <div class="sub">Total customer votes received</div>
+    <canvas id="votesChart"></canvas>
+  </div>
+
+  <div class="card">
+    <h2>Popularity vs. Rating</h2>
+    <div class="sub">Bubble size = number of restaurants</div>
+    <canvas id="scatterChart"></canvas>
+  </div>
+
+  <div class="insight full">
+    <h2>Key Insights</h2>
+    <ul>
+      <li><b>Niche cuisines rate higher:</b> Indian, Bar Food, Sandwich, BBQ and Mediterranean top the rating charts (~4.0-4.2 avg) — but with far fewer restaurants (30-150) than the mass-market categories.</li>
+      <li><b>High volume ≠ high rating:</b> North Indian, Chinese, Fast Food and Mughlai draw the most votes (100K-600K+) but sit near the bottom of the rating scale (~3.2-3.3 avg), suggesting oversaturation and inconsistent quality at scale.</li>
+      <li><b>The sweet spot:</b> Mediterranean, European and Asian cuisines combine solid ratings (3.9-4.0) with genuinely high vote counts (80K-105K) — the best balance of popularity and quality.</li>
+      <li><b>Overall market:</b> average rating across all rated restaurants is only 3.44/5, meaning most restaurants sit in the "average" band rather than "excellent."</li>
+    </ul>
+  </div>
+</div>
+
+<footer>Built with Flask + Chart.js &middot; Data: Zomato Restaurants Dataset</footer>
+
+<script>
+const DATA = {{ data|safe }};
+
+Chart.defaults.color = '#8b949e';
+Chart.defaults.borderColor = '#262c36';
+
+document.getElementById('statRestaurants').textContent = DATA.total_restaurants.toLocaleString();
+document.getElementById('statCuisines').textContent = DATA.unique_cuisines;
+document.getElementById('statAvg').textContent = DATA.overall_avg;
+
+function horizontalBar(canvasId, items, key, color, labelName){
+  new Chart(document.getElementById(canvasId), {
+    type: 'bar',
+    data: {
+      labels: items.map(i => i.cuisine),
+      datasets: [{
+        label: labelName,
+        data: items.map(i => i[key]),
+        backgroundColor: color,
+        borderRadius: 4
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { color: '#21262d' } },
+        y: { grid: { display: false } }
+      }
+    }
+  });
+}
+
+horizontalBar('topRatedChart', DATA.top_rated, 'avg_rating', '#3fb950', 'Avg Rating');
+horizontalBar('bottomRatedChart', DATA.bottom_rated, 'avg_rating', '#f85149', 'Avg Rating');
+horizontalBar('votesChart', DATA.top_voted, 'votes', '#58a6ff', 'Total Votes');
+
+new Chart(document.getElementById('scatterChart'), {
+  type: 'bubble',
+  data: {
+    datasets: [{
+      label: 'Cuisine',
+      data: DATA.scatter.map(s => ({ x: s.votes, y: s.avg_rating, r: Math.min(Math.sqrt(s.count)*1.4, 24) })),
+      backgroundColor: 'rgba(88,166,255,0.5)',
+      borderColor: '#58a6ff'
+    }]
+  },
+  options: {
+    responsive: true,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        callbacks: {
+          label: function(ctx){
+            const s = DATA.scatter[ctx.dataIndex];
+            return `${s.cuisine}: ${s.avg_rating}★, ${s.votes.toLocaleString()} votes, ${s.count} restaurants`;
+          }
+        }
+      }
+    },
+    scales: {
+      x: { title: { display:true, text:'Total Votes' }, grid:{color:'#21262d'} },
+      y: { title: { display:true, text:'Avg Rating' }, grid:{color:'#21262d'} }
+    }
+  }
+});
+</script>
+
+</body>
+</html>
